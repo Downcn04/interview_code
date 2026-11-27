@@ -18,6 +18,7 @@ add_executable(MeetingAI
     src/mainwindow.cpp
     src/asrbackend.h
     src/aliyunasr.cpp
+    src/turnassembler.cpp
     src/aiclient.cpp
     src/config.cpp
 )

@@ -13,6 +13,8 @@ struct Config {
     QString aliyunWsUrl;
     QString systemPrompt;
     int historyTurns = 8;
+    int turnDebounceMs = 800;
+    int turnMaxWaitMs = 6000;
 
     static Config load();
 };

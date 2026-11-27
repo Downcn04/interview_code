@@ -13,6 +13,7 @@
 
 #include "asrbackend.h"
 #include "aliyunasr.h"
+#include "turnassembler.h"
 #include "aiclient.h"
 #include "config.h"
 
@@ -33,10 +34,15 @@ MainWindow::MainWindow(const Config &cfg, QWidget *parent)
                           cfg.aliyunRegion, cfg.aliyunToken, cfg.aliyunWsUrl, this);
     m_ai = new AIClient(cfg.aiBaseUrl, cfg.aiApiKey, cfg.aiModel, cfg.systemPrompt,
                         cfg.historyTurns, this);
+    m_assembler = new TurnAssembler(cfg.turnDebounceMs, cfg.turnMaxWaitMs, this);
 
     connect(m_asr, &AsrBackend::textRecognized, this, [this](const QString &text) {
         appendLog(QStringLiteral("[识别] %1").arg(text), QStringLiteral("#7fd1ff"));
-        m_ai->ask(text);
+        m_assembler->push(text);
+    });
+    connect(m_assembler, &TurnAssembler::questionReady, this, [this](const QString &q) {
+        appendLog(QStringLiteral("[提问] %1").arg(q), QStringLiteral("#c9b6ff"));
+        m_ai->ask(q);
     });
     connect(m_asr, &AsrBackend::errorOccurred, this, [this](const QString &err) {
         appendLog(QStringLiteral("[错误] %1").arg(err), QStringLiteral("#ff6b6b"));

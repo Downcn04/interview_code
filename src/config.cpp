@@ -132,5 +132,12 @@ Config Config::load()
     if (c.historyTurns > 50)
         c.historyTurns = 50;
 
+    c.turnDebounceMs = pick(env, dot, "TURN_DEBOUNCE_MS", "800").toInt();
+    if (c.turnDebounceMs < 0)
+        c.turnDebounceMs = 0;
+    c.turnMaxWaitMs = pick(env, dot, "TURN_MAX_WAIT_MS", "6000").toInt();
+    if (c.turnMaxWaitMs < 0)
+        c.turnMaxWaitMs = 0;
+
     return c;
 }

@@ -7,6 +7,7 @@ class QTextEdit;
 class QPushButton;
 class AsrBackend;
 class AIClient;
+class TurnAssembler;
 struct Config;
 
 class MainWindow : public QWidget {
@@ -29,6 +30,7 @@ private:
 
     AsrBackend *m_asr = nullptr;
     AIClient *m_ai = nullptr;
+    TurnAssembler *m_assembler = nullptr;
     QLabel *m_subtitle = nullptr;
     QLabel *m_status = nullptr;
     QTextEdit *m_log = nullptr;
