@@ -1,0 +1,42 @@
+# secrets
+.env
+**/.env
+*.env
+!*.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# build outputs
+build/
+cpp/build/
+*.obj
+*.o
+*.exe
+*.dll
+*.a
+*.lib
+*.pdb
+*.ilk
+
+# models & downloads
+models/
+*.zip
+*.7z
+*.tar.gz
+
+# third-party vosk binaries / extracted SDK
+cpp/third_party/vosk/lib/
+cpp/third_party/vosk/vosk-win64-*/
+cpp/third_party/vosk/*.zip
+
+# logs
+*.log
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store

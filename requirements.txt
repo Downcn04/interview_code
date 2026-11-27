@@ -1,0 +1,7 @@
+SpeechRecognition
+requests
+PyAudio
+faster-whisper
+vosk
+numpy
+python-dotenv
