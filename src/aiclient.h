@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <QJsonObject>
 
 class QNetworkAccessManager;
 
@@ -14,6 +15,7 @@ public:
              QObject *parent = nullptr);
 
     void ask(const QString &text);
+    QJsonObject lastUsage() const { return m_lastUsage; }
 
 signals:
     void answered(const QString &reply);
@@ -39,4 +41,5 @@ private:
     QVector<Turn> m_history;
     QStringList m_queue;
     bool m_busy = false;
+    QJsonObject m_lastUsage;
 };

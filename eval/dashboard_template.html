@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 助手 · Eval 看板</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1117; color: #e6e6ee; }
+  header { padding: 16px 20px; border-bottom: 1px solid #262636; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+  select, button { background: #1b1c26; color: #e6e6ee; border: 1px solid #33344a; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  button { cursor: pointer; }
+  button.primary { background: #7c5cff; border-color: #7c5cff; }
+  .muted { color: #8b8b9e; font-size: 12px; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; padding: 16px 20px 4px; }
+  .card { background: #161822; border: 1px solid #262636; border-radius: 12px; padding: 12px 16px; min-width: 120px; }
+  .card .k { color: #8b8b9e; font-size: 12px; }
+  .card .v { font-size: 20px; font-weight: 600; margin-top: 4px; }
+  main { padding: 12px 20px 40px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid #22232f; }
+  th { color: #9a9ab0; font-weight: 500; position: sticky; top: 0; background: #0f1117; z-index: 1; }
+  td.q { max-width: 220px; }
+  td.a { max-width: 460px; }
+  .ans { white-space: pre-wrap; line-height: 1.5; max-height: 170px; overflow: auto; }
+  .err { color: #ff8080; }
+  .barwrap { background: #22232f; border-radius: 3px; width: 100px; overflow: hidden; }
+  .bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #5ad469, #7c5cff); }
+  .tag { display: inline-block; font-size: 11px; color: #b9a6ff; border: 1px solid #3a3357; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .empty { padding: 40px 20px; color: #8b8b9e; }
+  .judge { font-size: 12px; min-width: 120px; }
+  .judge details { margin-top: 4px; }
+  .judge summary { cursor: pointer; color: #9a9ab0; }
+  .judge .reason { color: #8b8b9e; margin: 2px 0 4px; line-height: 1.4; }
+  .scorebox { display: flex; flex-direction: column; gap: 4px; min-width: 132px; }
+  .scorebox label { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: #9a9ab0; }
+  .scorebox select { padding: 2px 4px; font-size: 12px; width: 54px; }
+  .overall { margin-top: 4px; font-size: 12px; font-weight: 600; }
+  .pass { color: #5ad469; }
+  .fail { color: #ff8080; }
+  .pending { color: #8b8b9e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>会议 AI 助手 · Eval 看板</h1>
+  <select id="runSel"></select>
+  <button id="exportBtn" class="primary">导出评分</button>
+  <span class="muted" id="runInfo"></span>
+</header>
+<div class="cards" id="cards"></div>
+<main>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>标签</th><th>问题</th><th>回答</th>
+        <th>延迟</th><th>Prompt</th><th>Completion</th><th>缓存命中</th><th>评分（5 维）</th><th>裁判</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none">还没有评测结果，先运行 <code>MeetingAI.exe --eval</code>。</div>
+</main>
+<script>
+const RUNS = __RUNS_JSON__;
+
+const DIMS = [
+  { key: 'relevance',    label: '相关', weight: 0.30 },
+  { key: 'factuality',   label: '事实', weight: 0.35 },
+  { key: 'spoken_style', label: '口语', weight: 0.15 },
+  { key: 'length',       label: '长度', weight: 0.10 },
+  { key: 'followup',     label: '追问', weight: 0.10 },
+];
+const PASS_OVERALL = 3.5;
+const PASS_FACT = 3;
+
+const runSel = document.getElementById('runSel');
+const tbody = document.getElementById('tbody');
+const cards = document.getElementById('cards');
+const runInfo = document.getElementById('runInfo');
+const empty = document.getElementById('empty');
+
+function fmt(n) { return (n === undefined || n === null) ? '-' : n; }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+function scoreKey(run, idx, dim) { return 'evalScore:' + run + ':' + idx + ':' + dim; }
+function getScores(run, idx, it) {
+  const out = {};
+  const judged = (it && it.judge && it.judge.scores) ? it.judge.scores : {};
+  DIMS.forEach(d => {
+    const v = localStorage.getItem(scoreKey(run, idx, d.key));
+    if (v !== null && parseInt(v, 10) > 0) {
+      out[d.key] = parseInt(v, 10);
+    } else {
+      const jd = judged[d.key];
+      const s = (jd && typeof jd === 'object') ? Number(jd.score) : 0;
+      out[d.key] = (s >= 1 && s <= 5) ? s : 0;
+    }
+  });
+  return out;
+}
+function computeOverall(scores) {
+  let sum = 0, wsum = 0;
+  DIMS.forEach(d => {
+    const s = scores[d.key] || 0;
+    if (s > 0) { sum += s * d.weight; wsum += d.weight; }
+  });
+  return wsum > 0 ? sum / wsum : null;
+}
+function passState(scores) {
+  const ov = computeOverall(scores);
+  if (ov === null || !(scores.factuality > 0)) return 'pending';
+  return (ov >= PASS_OVERALL && scores.factuality >= PASS_FACT) ? 'pass' : 'fail';
+}
+
+RUNS.forEach((r, i) => {
+  const o = document.createElement('option');
+  o.value = String(i);
+  o.textContent = r.run + ' · ' + (r.model || '') + ' · ' + r.items.length + ' 题';
+  runSel.appendChild(o);
+});
+
+function addCard(k, v) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  const kk = document.createElement('div'); kk.className = 'k'; kk.textContent = k;
+  const vv = document.createElement('div'); vv.className = 'v'; vv.textContent = v;
+  d.appendChild(kk); d.appendChild(vv);
+  cards.appendChild(d);
+}
+
+function render(i) {
+  const r = RUNS[i];
+  if (!r) return;
+  const items = r.items || [];
+
+  let totalLat = 0, totalPrompt = 0, totalCache = 0, ok = 0;
+  let ovSum = 0, ovN = 0, passed = 0, decided = 0, judgedCount = 0;
+  const dimSum = {}, dimN = {};
+  DIMS.forEach(d => { dimSum[d.key] = 0; dimN[d.key] = 0; });
+
+  items.forEach((it, idx) => {
+    totalLat += Number(it.latencyMs) || 0;
+    const u = it.usage || {};
+    totalPrompt += Number(u.prompt_tokens) || 0;
+    totalCache += Number(u.prompt_cache_hit_tokens) || 0;
+    if (!it.error) ok++;
+    if (it.judge) judgedCount++;
+
+    const sc = getScores(r.run, idx, it);
+    const ov = computeOverall(sc);
+    if (ov !== null) { ovSum += ov; ovN++; }
+    const ps = passState(sc);
+    if (ps !== 'pending') { decided++; if (ps === 'pass') passed++; }
+    DIMS.forEach(d => {
+      if (sc[d.key] > 0) { dimSum[d.key] += sc[d.key]; dimN[d.key]++; }
+    });
+  });
+
+  const avgLat = items.length ? Math.round(totalLat / items.length) : 0;
+  const avgOv = ovN ? (ovSum / ovN).toFixed(2) : '-';
+  const passRate = decided ? Math.round(passed / decided * 100) + '%' : '-';
+
+  runInfo.textContent = 'model: ' + (r.model || '-') + ' · 运行于 ' + r.run;
+
+  cards.innerHTML = '';
+  addCard('题数', items.length);
+  addCard('成功', ok + '/' + items.length);
+  addCard('通过率', passRate + (decided ? ' (' + passed + '/' + decided + ')' : ''));
+  addCard('平均延迟', avgLat + ' ms');
+  addCard('平均 Prompt', Math.round(totalPrompt / Math.max(1, items.length)) + ' t');
+  addCard('缓存命中', totalCache + ' t');
+  addCard('平均综合', avgOv);
+  addCard('裁判覆盖', judgedCount + '/' + items.length);
+  DIMS.forEach(d => {
+    const v = dimN[d.key] ? (dimSum[d.key] / dimN[d.key]).toFixed(2) : '-';
+    addCard(d.label + '均分', v);
+  });
+
+  tbody.innerHTML = '';
+  const maxLat = Math.max(1, ...items.map(it => Number(it.latencyMs) || 0));
+  items.forEach((it, idx) => {
+    const u = it.usage || {};
+    const beat = Math.max(2, Math.round((Number(it.latencyMs) || 0) / maxLat * 100));
+    const tr = document.createElement('tr');
+
+    const tdId = document.createElement('td');
+    tdId.textContent = (it.id != null ? it.id : idx + 1);
+
+    const tdTag = document.createElement('td');
+    if (it.tag) {
+      const s = document.createElement('span'); s.className = 'tag'; s.textContent = it.tag;
+      tdTag.appendChild(s);
+    }
+
+    const tdQ = document.createElement('td'); tdQ.className = 'q'; tdQ.textContent = it.question || '';
+
+    const tdA = document.createElement('td'); tdA.className = 'a';
+    const ans = document.createElement('div');
+    ans.className = 'ans' + (it.error ? ' err' : '');
+    ans.textContent = it.error ? ('错误: ' + it.error) : (it.answer || '');
+    tdA.appendChild(ans);
+
+    const tdLat = document.createElement('td');
+    const bw = document.createElement('div'); bw.className = 'barwrap';
+    const bar = document.createElement('div'); bar.className = 'bar'; bar.style.width = beat + '%';
+    bw.appendChild(bar);
+    const ms = document.createElement('div'); ms.className = 'muted'; ms.textContent = fmt(it.latencyMs) + ' ms';
+    tdLat.appendChild(bw); tdLat.appendChild(ms);
+
+    const tdP = document.createElement('td'); tdP.textContent = fmt(u.prompt_tokens);
+    const tdC = document.createElement('td'); tdC.textContent = fmt(u.completion_tokens);
+    const tdH = document.createElement('td'); tdH.textContent = fmt(u.prompt_cache_hit_tokens);
+
+    const scores = getScores(r.run, idx, it);
+    const tdS = document.createElement('td');
+    const box = document.createElement('div'); box.className = 'scorebox';
+
+    DIMS.forEach(d => {
+      const lab = document.createElement('label');
+      const name = document.createElement('span'); name.textContent = d.label;
+      const sel = document.createElement('select');
+      [['0', '-'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']].forEach(([v, t]) => {
+        const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+      });
+      sel.value = String(scores[d.key] || 0);
+      sel.addEventListener('change', () => {
+        localStorage.setItem(scoreKey(r.run, idx, d.key), sel.value);
+        render(i);
+      });
+      lab.appendChild(name); lab.appendChild(sel);
+      box.appendChild(lab);
+    });
+
+    const ov = computeOverall(scores);
+    const ps = passState(scores);
+    const ovDiv = document.createElement('div');
+    ovDiv.className = 'overall ' + (ps === 'pass' ? 'pass' : ps === 'fail' ? 'fail' : 'pending');
+    ovDiv.textContent = ov === null ? '综合 - · 待评'
+                                    : '综合 ' + ov.toFixed(2) + ' · ' + (ps === 'pass' ? '通过' : '不通过');
+    box.appendChild(ovDiv);
+    tdS.appendChild(box);
+
+    const tdJ = document.createElement('td');
+    tdJ.className = 'judge';
+    if (it.judge) {
+      if (it.judge.judge_error) {
+        tdJ.innerHTML = '<span class="fail">裁判失败</span><div class="muted">'
+          + esc(it.judge.judge_error) + '</div>';
+      } else {
+        const jp = it.judge.pass ? 'pass' : 'fail';
+        const jt = it.judge.pass ? '通过' : '不通过';
+        const jov = Number(it.judge.overall || 0).toFixed(2);
+        let reasons = '';
+        DIMS.forEach(d => {
+          const jd = it.judge.scores ? it.judge.scores[d.key] : null;
+          if (jd && jd.score != null) {
+            reasons += '<div class="reason">' + d.label + ' ' + jd.score + '：'
+              + esc(jd.reason || '') + '</div>';
+          }
+        });
+        tdJ.innerHTML = '<span class="' + jp + '">裁判 ' + jov + ' · ' + jt + '</span>'
+          + '<details><summary>理由</summary>' + reasons
+          + '<div class="muted">' + esc(it.judge.summary || '') + '</div></details>';
+      }
+    } else {
+      tdJ.innerHTML = '<span class="pending">未评</span>';
+    }
+
+    [tdId, tdTag, tdQ, tdA, tdLat, tdP, tdC, tdH, tdS, tdJ].forEach(td => tr.appendChild(td));
+    tbody.appendChild(tr);
+  });
+}
+
+runSel.addEventListener('change', () => render(Number(runSel.value)));
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const out = [];
+  RUNS.forEach(r => (r.items || []).forEach((it, idx) => {
+    const sc = getScores(r.run, idx, it);
+    const any = DIMS.some(d => sc[d.key] > 0);
+    if (!any) return;
+    const ov = computeOverall(sc);
+    out.push({
+      run: r.run, id: it.id, question: it.question,
+      scores: sc,
+      overall: ov === null ? null : Number(ov.toFixed(2)),
+      pass: passState(sc) === 'pass',
+      judge: it.judge || null,
+    });
+  }));
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'eval_scores.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+if (RUNS.length) {
+  runSel.value = '0';
+  render(0);
+} else {
+  empty.style.display = 'block';
+}
+</script>
+</body>
+</html>

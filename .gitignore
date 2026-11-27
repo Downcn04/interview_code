@@ -23,6 +23,10 @@ build/
 # logs
 *.log
 
+# eval generated outputs
+eval/results/
+eval/dashboard.html
+
 # editors / OS
 .vscode/
 .idea/

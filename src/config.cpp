@@ -139,5 +139,9 @@ Config Config::load()
     if (c.turnMaxWaitMs < 0)
         c.turnMaxWaitMs = 0;
 
+    c.judgeBaseUrl = pick(env, dot, "JUDGE_BASE_URL", c.aiBaseUrl);
+    c.judgeApiKey = pick(env, dot, "JUDGE_API_KEY", c.aiApiKey);
+    c.judgeModel = pick(env, dot, "JUDGE_MODEL", c.aiModel);
+
     return c;
 }

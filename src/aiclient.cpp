@@ -112,6 +112,7 @@ void AIClient::send(const QString &text)
         }
 
         const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        m_lastUsage = doc.object().value(QStringLiteral("usage")).toObject();
         const QJsonArray choices = doc.object().value("choices").toArray();
         if (choices.isEmpty()) {
             emit failed(QStringLiteral("AI 返回为空"));

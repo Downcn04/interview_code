@@ -9,12 +9,15 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUuid>
+#include <QElapsedTimer>
 
 #include <cstdio>
 
 #include "config.h"
 #include "mainwindow.h"
 #include "aliyunasr.h"
+#include "aiclient.h"
+#include "evalrunner.h"
 
 int main(int argc, char *argv[])
 {
@@ -105,6 +108,85 @@ int main(int argc, char *argv[])
             return 0;
         }
         return 1;
+    }
+
+    if (args.contains(QStringLiteral("--dashboard"))) {
+        return EvalRunner::generateDashboard() == 0 ? 0 : 1;
+    }
+
+    if (args.contains(QStringLiteral("--eval"))) {
+        QString path;
+        const int idx = args.indexOf(QStringLiteral("--eval"));
+        if (idx >= 0 && idx + 1 < args.size()
+            && !args.at(idx + 1).startsWith(QStringLiteral("--")))
+            path = args.at(idx + 1);
+        EvalRunner runner(cfg);
+        return runner.run(path) > 0 ? 0 : 1;
+    }
+
+    if (args.contains(QStringLiteral("--judge"))) {
+        QString path;
+        const int idx = args.indexOf(QStringLiteral("--judge"));
+        if (idx >= 0 && idx + 1 < args.size()
+            && !args.at(idx + 1).startsWith(QStringLiteral("--")))
+            path = args.at(idx + 1);
+        EvalRunner runner(cfg);
+        return runner.judge(path) > 0 ? 0 : 1;
+    }
+
+    if (args.contains(QStringLiteral("--ask"))) {
+        const int idx = args.indexOf(QStringLiteral("--ask"));
+        QString question;
+        if (idx >= 0 && idx + 1 < args.size())
+            question = args.at(idx + 1);
+        if (question.trimmed().isEmpty()) {
+            std::fprintf(stderr, "usage: MeetingAI.exe --ask \"question\"\n");
+            return 1;
+        }
+
+        AIClient ai(cfg.aiBaseUrl, cfg.aiApiKey, cfg.aiModel,
+                    cfg.systemPrompt, cfg.historyTurns);
+        QEventLoop loop;
+        QTimer timer;
+        timer.setSingleShot(true);
+        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+        bool finished = false;
+        QString reply;
+        QString err;
+        QObject::connect(&ai, &AIClient::answered, &loop, [&](const QString &r) {
+            reply = r;
+            finished = true;
+            loop.quit();
+        });
+        QObject::connect(&ai, &AIClient::failed, &loop, [&](const QString &e) {
+            err = e;
+            finished = true;
+            loop.quit();
+        });
+
+        QElapsedTimer elapsed;
+        elapsed.start();
+        ai.ask(question);
+        if (!finished) {
+            timer.start(60000);
+            loop.exec();
+        }
+        if (!finished)
+            err = QStringLiteral("timeout");
+
+        const QJsonObject usage = ai.lastUsage();
+        std::printf("latency: %lld ms\n", static_cast<long long>(elapsed.elapsed()));
+        std::printf("prompt_tokens: %d  completion_tokens: %d  cache_hit: %d\n",
+                    usage.value(QStringLiteral("prompt_tokens")).toInt(),
+                    usage.value(QStringLiteral("completion_tokens")).toInt(),
+                    usage.value(QStringLiteral("prompt_cache_hit_tokens")).toInt());
+        if (!err.isEmpty()) {
+            std::fprintf(stderr, "ERROR: %s\n", err.toUtf8().constData());
+            return 1;
+        }
+        std::printf("%s\n", reply.toUtf8().constData());
+        return 0;
     }
 
     MainWindow w(cfg);
