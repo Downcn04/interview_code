@@ -1,18 +1,16 @@
 # secrets
 .env
-**/.env
 *.env
 !*.env.example
 
-# python
-__pycache__/
-*.py[cod]
+# dev env
 .venv/
 venv/
+__pycache__/
+*.py[cod]
 
 # build outputs
 build/
-cpp/build/
 *.obj
 *.o
 *.exe
@@ -21,17 +19,6 @@ cpp/build/
 *.lib
 *.pdb
 *.ilk
-
-# models & downloads
-models/
-*.zip
-*.7z
-*.tar.gz
-
-# third-party vosk binaries / extracted SDK
-cpp/third_party/vosk/lib/
-cpp/third_party/vosk/vosk-win64-*/
-cpp/third_party/vosk/*.zip
 
 # logs
 *.log

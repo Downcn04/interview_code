@@ -2,7 +2,6 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Split-Path -Parent $root
 
 $qt = $env:QT_DIR
 if (-not $qt) { $qt = "C:/Qt/6.7.3/mingw_64" }
@@ -10,7 +9,7 @@ $mingw = $env:MINGW_DIR
 if (-not $mingw) { $mingw = "C:/Qt/Tools/mingw1310_64" }
 
 # 优先使用项目根目录 .venv 里的 cmake/ninja，否则用系统 PATH 中的
-$venvTools = Join-Path $projectRoot ".venv/Scripts"
+$venvTools = Join-Path $root ".venv/Scripts"
 $cmake = "cmake"
 $ninja = "ninja"
 if (Test-Path (Join-Path $venvTools "cmake.exe")) { $cmake = Join-Path $venvTools "cmake.exe" }
