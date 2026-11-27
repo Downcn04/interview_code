@@ -5,9 +5,6 @@ struct Config {
     QString aiBaseUrl;
     QString aiApiKey;
     QString aiModel;
-    QString asrEngine;
-    QString asrLanguage;
-    QString voskModelPath;
     QString aliyunAppKey;
     QString aliyunAkId;
     QString aliyunAkSecret;

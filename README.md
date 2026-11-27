@@ -1,83 +1,58 @@
-# 会议 AI 助手（共享屏幕不可见）
+# 会议 / 面试 AI 助手（共享屏幕不可见）
 
-会议中自动识别对方发言，喂给大模型，实时在小窗显示回答。窗口使用 Windows `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`，在 Teams/Zoom/OBS 屏幕共享和截图中显示为空白，只有你自己能看见。
+实时把会议或面试中的声音转成文字，交给大模型，在悬浮小窗显示回答。窗口基于 Windows
+`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`，在屏幕共享 / 录屏 / 截图中对观众不可见，
+仅本机可见。
 
-## 目录结构
+> 本项目**仅使用阿里云智能语音交互（实时语音识别）**，请先开通并配置阿里云，再运行。
+
+## 功能
+
+- 阿里云实时语音识别（WebSocket 流式识别，中文 / 英文）
+- 任意 OpenAI 兼容大模型（DeepSeek / OpenAI / Ollama …）
+- 滚动会话记忆（默认最近 8 轮）+ 面试化系统提示，可注入简历 / JD
+- 悬浮窗：无边框、置顶、半透明、可拖动、可最小化、共享不可见
+
+## 目录
 
 ```
-ai_meeting_assistant/
-├── src/
-│   ├── __init__.py
-│   ├── main.py       # 入口
-│   ├── config.py     # 配置
-│   ├── windows.py    # Windows API：共享时不可见
-│   ├── ai.py         # 大模型调用（OpenAI 兼容接口）
-│   ├── asr.py        # 语音识别（google / faster-whisper / vosk）
-│   └── ui.py         # tkinter 界面
-├── requirements.txt
-├── .env.example
-└── README.md
+cpp/    # 主程序（C++ / Qt6），使用阿里云实时识别 —— 推荐
+src/    # 早期 Python 原型（已废弃，仅供参考，不支持阿里云）
 ```
+
+## 前置要求（必须）
+
+1. 阿里云账号，开通「智能语音交互 → 实时语音识别」
+2. 在控制台创建项目，获取 **AppKey**
+3. 创建 **AccessKey ID / Secret**
+4. AppKey、AccessKey、Token 必须属于同一个阿里云账号
 
 ## 快速开始
 
-1. 创建虚拟环境并安装依赖：
-
 ```powershell
-cd C:\Users\maofe\Desktop\ai_meeting_assistant
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-> 若 `PyAudio` 安装失败，可改用 `pipwin`：`pip install pipwin && pipwin install pyaudio`
-
-2. 配置环境变量：
-
-```powershell
+cd cpp
 copy .env.example .env
-# 编辑 .env 填入 AI_API_KEY、ASR_ENGINE 等
+# 编辑 .env：填 AI_API_KEY、ALIYUN_APPKEY、ALIYUN_ACCESS_KEY_ID、ALIYUN_ACCESS_KEY_SECRET
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+$env:Path = "C:\Qt\6.7.3\mingw_64\bin;C:\Qt\Tools\mingw1310_64\bin;" + $env:Path
+.\build\MeetingAI.exe
 ```
 
-3. 运行：
+自检：
 
 ```powershell
-python -m src.main
+.\build\MeetingAI.exe --test-token   # 验证 AccessKey 换 Token
+.\build\MeetingAI.exe --test-asr     # 验证 AppKey 与实时服务
 ```
 
-## ASR 引擎选择
+## 配置
 
-在 `.env` 中设置 `ASR_ENGINE`：
+详见 `cpp/.env.example` 与 `cpp/README.md`。系统提示在 `cpp/system_prompt.txt`；
+可选放 `cpp/resume.md`、`cpp/jd.md` 做简历 / JD 注入。
 
-- `google`：Google Web Speech API，免费无需 Key，有配额，境外服务（默认）
-- `whisper`：本地 `faster-whisper` 离线识别，需下载模型，完全本地运行
-- `vosk`：本地 `Vosk` 离线识别，需手动下载模型文件并设置 `VOSK_MODEL_PATH`
+## 说明
 
-### 使用 faster-whisper
-
-```powershell
-# .env
-ASR_ENGINE=whisper
-WHISPER_MODEL=base
-WHISPER_DEVICE=cpu
-WHISPER_COMPUTE_TYPE=int8
-```
-
-首次运行会自动下载 Whisper 模型（约 140MB base 模型），需联网。
-
-### 使用 Vosk
-
-1. 从 https://alphacephei.com/vosk/models 下载中文模型（如 `vosk-model-cn-0.22`）
-2. 解压到任意目录，例如 `D:\models\vosk-model-cn-0.22`
-3. `.env` 配置：
-
-```powershell
-ASR_ENGINE=vosk
-VOSK_MODEL_PATH=D:\models\vosk-model-cn-0.22
-```
-
-## 注意事项
-
-- 默认读取系统默认麦克风。如需捕获会议软件中对方的声音，请在 Windows 声音设置中将录音设备改为“立体声混音”，或使用 WASAPI Loopback 捕获系统输出。
-- 共享屏幕不可见需 Windows 10 1809（build 17763）或更高版本。
-- 未配置 `AI_API_KEY` 时会以模拟模式运行，方便先跑通界面。
+- 需要 Windows 10 1809（build 17763）或更高版本。
+- 未配置 `AI_API_KEY` 时以模拟模式运行。
+- 如需捕获会议里对方的声音，把系统录音设备设为「立体声混音」。

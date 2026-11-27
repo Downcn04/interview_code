@@ -68,9 +68,6 @@ Config Config::load()
     c.aiBaseUrl = pick(env, dot, "AI_BASE_URL", "https://api.openai.com/v1/chat/completions");
     c.aiApiKey = pick(env, dot, "AI_API_KEY", "");
     c.aiModel = pick(env, dot, "AI_MODEL", "gpt-3.5-turbo");
-    c.asrEngine = pick(env, dot, "ASR_ENGINE", "vosk");
-    c.asrLanguage = pick(env, dot, "ASR_LANGUAGE", "zh-CN");
-    c.voskModelPath = pick(env, dot, "VOSK_MODEL_PATH", "");
     c.aliyunAppKey = pick(env, dot, "ALIYUN_APPKEY", "");
     c.aliyunAkId = pick(env, dot, "ALIYUN_ACCESS_KEY_ID", "");
     c.aliyunAkSecret = pick(env, dot, "ALIYUN_ACCESS_KEY_SECRET", "");

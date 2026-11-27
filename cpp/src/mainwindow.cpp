@@ -11,7 +11,6 @@
 #include <QTimer>
 #include <QApplication>
 
-#include "asr.h"
 #include "asrbackend.h"
 #include "aliyunasr.h"
 #include "aiclient.h"
@@ -30,12 +29,8 @@ MainWindow::MainWindow(const Config &cfg, QWidget *parent)
 
     buildUi();
 
-    if (cfg.asrEngine.compare(QStringLiteral("aliyun"), Qt::CaseInsensitive) == 0) {
-        m_asr = new AliyunAsr(cfg.aliyunAppKey, cfg.aliyunAkId, cfg.aliyunAkSecret,
-                              cfg.aliyunRegion, cfg.aliyunToken, cfg.aliyunWsUrl, this);
-    } else {
-        m_asr = new AsrEngine(cfg.voskModelPath, this);
-    }
+    m_asr = new AliyunAsr(cfg.aliyunAppKey, cfg.aliyunAkId, cfg.aliyunAkSecret,
+                          cfg.aliyunRegion, cfg.aliyunToken, cfg.aliyunWsUrl, this);
     m_ai = new AIClient(cfg.aiBaseUrl, cfg.aiApiKey, cfg.aiModel, cfg.systemPrompt,
                         cfg.historyTurns, this);
 
